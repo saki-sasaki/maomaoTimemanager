@@ -1,0 +1,1241 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>マオマオ 卓管理ツール</title>
+  <link rel="icon" href="アイコン.png" type="image/png">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div id="headerStatus" class="header-status"></div>
+      </div>
+
+      <div class="controls">
+        <button class="btn ghost" id="btnPrev">◀ 前日</button>
+        <div class="field" title="営業日">
+          <input type="date" id="datePicker" />
+        </div>
+        <button class="btn ghost" id="btnNext">翌日 ▶</button>
+        <button class="btn ghost" id="btnToday">今日</button>
+        <button class="btn primary" id="btnNew">＋ 新規</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="floor">
+        <!-- ★配置はCSS Gridで決める（HTMLは並べるだけ） -->
+        <div class="seat-grid">
+          <!-- Counters -->
+          <div class="zone counter" data-seat="C1">
+            <div class="zone-title">C1</div>
+            <div class="drop" id="seat-C1"></div>
+          </div>
+
+          <div class="zone counter" data-seat="C2">
+            <div class="zone-title">C2</div>
+            <div class="drop" id="seat-C2"></div>
+          </div>
+
+          <!-- Boxes (big) -->
+          <div class="zone box" data-seat="BOX1">
+            <div class="zone-title">BOX1</div>
+            <div class="drop" id="seat-BOX1"></div>
+          </div>
+
+          <div class="zone box" data-seat="BOX2">
+            <div class="zone-title">BOX2</div>
+            <div class="drop" id="seat-BOX2"></div>
+          </div>
+
+          <!-- Bottom counters -->
+          <div class="zone counter" data-seat="C3">
+            <div class="zone-title">C3</div>
+            <div class="drop" id="seat-C3"></div>
+          </div>
+
+          <div class="zone counter" data-seat="C4">
+            <div class="zone-title">C4</div>
+            <div class="drop" id="seat-C4"></div>
+          </div>
+
+          <div class="zone counter" data-seat="C5">
+            <div class="zone-title">C5</div>
+            <div class="drop" id="seat-C5"></div>
+          </div>
+
+          <div class="zone counter" data-seat="C6">
+            <div class="zone-title">C6</div>
+            <div class="drop" id="seat-C6"></div>
+          </div>
+
+          <div class="zone counter" data-seat="C7">
+            <div class="zone-title">C7</div>
+            <div class="drop" id="seat-C7"></div>
+          </div>
+
+          <div class="zone counter" data-seat="C8">
+            <div class="zone-title">C8</div>
+            <div class="drop" id="seat-C8"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="ttl">アーカイブ（受付表）</div>
+          <div class="right">
+            <input class="search" id="search" placeholder="名前検索（例：佐藤）" />
+            <button class="btn ghost" id="btnSortEnd">終了時間順</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>累計</th>
+                <th>卓番</th>
+                <th>区分</th>
+                <th>お客様名</th>
+                <th>人数</th>
+                <th>入店</th>
+                <th>退店</th>
+                <th>延長</th>
+                <th>状態</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- 新規/編集モーダル -->
+  <dialog id="dlg">
+    <div class="modal">
+      <div class="mhead">
+        <div class="mttl" id="dlgTitle">新規卓</div>
+        <button class="closeX" id="dlgClose">✕</button>
+      </div>
+
+      <!-- 編集時のみ表示：延長ワンタップ + 退店 -->
+      <div class="extbar" id="extbar" style="display:none;">
+        <div class="extbtns">
+          <button type="button" class="extbtn" data-min="30">+30</button>
+          <button type="button" class="extbtn" data-min="60">+60</button>
+          <button type="button" class="extbtn" data-act="close">退店</button>
+        </div>
+
+        <div class="metrics">
+          <div class="metric" id="mRem">残--分</div>
+          <div class="metric" id="mElp">経過--分</div>
+        </div>
+      </div>
+
+      <div class="form">
+        <div class="fg">
+          <label>お客様名（空でもOK）</label>
+          <input id="fName" placeholder="例：たなか 様" />
+        </div>
+
+        <div class="fg">
+          <label>伝票No</label>
+          <input id="fNo" type="number" min="1" step="1" />
+        </div>
+
+        <div class="fg full">
+          <label>区別</label>
+          <div class="typebar" id="typebar">
+            <button type="button" class="typebtn" data-type="new">新規</button>
+            <button type="button" class="typebtn" data-type="repeat">リピーター</button>
+            <button type="button" class="typebtn" data-type="unknown">不明</button>
+          </div>
+        </div>
+
+        <div class="fg full">
+          <label>使用席（タップでON/OFF）</label>
+          <div class="seatpick" id="seatPick"></div>
+          <div class="td-muted" style="font-size:12px;">
+            ※ 本体カードは「卓番」で選んだ席に置きます（他はスタンプ表示）
+          </div>
+        </div>
+
+        <div class="fg">
+          <label>人数</label>
+          <input id="fParty" type="number" min="1" max="20" value="1" />
+        </div>
+
+        <div class="fg">
+          <label>卓番（本体カード位置）</label>
+          <select id="fSeat"></select>
+        </div>
+
+        <div class="fg">
+          <label>入店（保存時に5分刻みに補正）</label>
+          <input id="fIn" type="time" step="300" />
+        </div>
+
+        <div class="fg">
+          <label>退店予定（調整OK）</label>
+          <input id="fDue" type="time" step="300" />
+          <div class="td-muted" style="font-size:12px;">
+            ※変更すると延長合計を自動調整（30分単位）
+          </div>
+        </div>
+
+        <div class="fg full">
+          <label>メモ（任意）</label>
+          <input id="fNote" placeholder="例：団体／歌OK など" />
+        </div>
+      </div>
+
+      <div class="mfoot">
+        <button class="btn ghost" id="dlgDelete">削除</button>
+        <button class="btn ghost" id="dlgCancel">キャンセル</button>
+        <button class="btn primary" id="dlgSave">保存</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
+  <script>
+  (() => {
+    "use strict";
+
+    // ★MaoMao seats
+    const SEATS = ["BOX1","BOX2","C1","C2","C3","C4","C5","C6","C7","C8"];
+
+    // ★60分スタート
+    const BASE_MIN = 60;
+
+    // ===== GAS WebApp URL（/exec）=====
+    // 別repo/別Sheetsなら、この /api の裏側を差し替えるだけでOK
+    const API_URL = "/api";
+
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const toHHMM = (date) => `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+
+    const parseHHMMToDate = (hhmm, baseDate) => {
+      const [h, m] = hhmm.split(":").map(Number);
+      const d = new Date(baseDate);
+      d.setHours(h, m, 0, 0);
+      return d;
+    };
+
+    const roundDown5Min = (date) => {
+      const d = new Date(date);
+      d.setMinutes(Math.floor(d.getMinutes() / 5) * 5, 0, 0);
+      return d;
+    };
+
+    const addMinutes = (date, min) => {
+      const d = new Date(date);
+      d.setMinutes(d.getMinutes() + min);
+      return d;
+    };
+
+    // ★営業時間 18:00〜8:00
+    // 8:00より前は “前日営業日”
+    const businessDateFor = (date) => {
+      const d = new Date(date);
+      const biz = new Date(d);
+      if (biz.getHours() < 8) biz.setDate(biz.getDate() - 1);
+      return `${biz.getFullYear()}-${pad2(biz.getMonth()+1)}-${pad2(biz.getDate())}`;
+    };
+
+    const nowRounded = () => roundDown5Min(new Date());
+
+    const checkInDateFromHHMM = (hhmm) => {
+      const base = new Date(currentBizDate + "T00:00:00");
+      let d = parseHHMMToDate(hhmm, base);
+
+      // 0:00〜7:59入力は翌日に寄せる（営業日内の深夜想定）
+      if (d.getHours() < 8) d.setDate(d.getDate() + 1);
+
+      d = roundDown5Min(d);
+
+      // 未来に飛びすぎガード（今の営業日のときだけ）
+      const isCurrentBiz = (currentBizDate === businessDateFor(new Date()));
+      if (isCurrentBiz){
+        const now = new Date();
+        const FUTURE_GUARD_MIN = 12 * 60;
+        if ((d - now) > FUTURE_GUARD_MIN * 60000){
+          d.setDate(d.getDate() - 1);
+          d = roundDown5Min(d);
+        }
+      }
+      return d;
+    };
+
+    const escapeHtml = (str) => String(str)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+
+    const elapsedMin = (g, now) => {
+      const inDate = new Date(g.checkInAt);
+      return Math.max(0, Math.floor((now - inDate) / 60000));
+    };
+
+    const totalExtMin = (g) => (g.extends || []).reduce((a, e) => a + (Number(e.min) || 0), 0);
+    const dueAt = (g) => addMinutes(new Date(g.checkInAt), BASE_MIN + totalExtMin(g));
+    const remainingMin = (g, now) => Math.floor((dueAt(g) - now) / 60000);
+
+    const guestTypeKey = (g) => {
+      const v = g?.guestType ?? g?.type ?? g?.customerType ?? g?.kbn ?? "unknown";
+      const s = String(v ?? "").trim().toLowerCase();
+      return s || "unknown";
+    };
+
+    const guestTypeLabel = (g) => {
+      const s = guestTypeKey(g);
+      if (["new","新規","shinki","first","初回","0"].includes(s)) return "新規";
+      if (["repeat","repeater","リピーター","リピ","1"].includes(s)) return "リピーター";
+      return "不明";
+    };
+
+    const typeShort = (g) => {
+      const t = guestTypeKey(g);
+      if (t === "new") return "新規";
+      if (t === "repeat" || t === "repeater") return "リピ";
+      return "不明";
+    };
+
+    const isBoxSeat = (seat) => /^BOX[12]$/.test(String(seat || ""));
+    const isCounterSeat = (seat) => /^C[1-8]$/.test(String(seat || ""));
+
+    /* ===== Storage (localStorage + Sheets) ===== */
+    const storageKey = (bizDate) => `maomao_day_${bizDate}`;
+
+    async function apiGetDay(bizDate){
+      const url = `${API_URL}?action=day&bizDate=${encodeURIComponent(bizDate)}`;
+      const res = await fetch(url, { method:"GET" });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || "api error");
+      return Array.isArray(json.groups) ? json.groups : [];
+    }
+
+    async function apiSaveDay(bizDate, groups){
+      const payload = { action:"saveDay", bizDate, groups };
+      const res = await fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+
+      const text = await res.text();
+      let json;
+      try { json = JSON.parse(text); } catch { throw new Error("Non-JSON: " + text); }
+      if (!json.ok) throw new Error(json.error || "api error");
+    }
+
+    async function loadDay(bizDate){
+      try{
+        const data = await apiGetDay(bizDate);
+        localStorage.setItem(storageKey(bizDate), JSON.stringify(data));
+        return data;
+      }catch{
+        const raw = localStorage.getItem(storageKey(bizDate));
+        if (!raw) return [];
+        try{
+          const data = JSON.parse(raw);
+          return Array.isArray(data) ? data : [];
+        }catch{
+          return [];
+        }
+      }
+    }
+
+    function saveDay(bizDate, groups){
+      if (isLoadingDay) return;
+      localStorage.setItem(storageKey(bizDate), JSON.stringify(groups));
+
+      apiSaveDay(bizDate, groups)
+        .then(()=> console.log("✅ Saved to Sheets"))
+        .catch((e)=> console.error("❌ Save failed", e));
+    }
+
+    /* ===== State ===== */
+    let currentBizDate = businessDateFor(new Date());
+    let groups = [];
+    let editingId = null;
+
+    let tempGuestType = "unknown";
+    let tempOccupied = new Set();
+    let sortByEnd = false;
+
+    // ===== Loading lock =====
+    let isLoadingDay = false;
+    function setLoadingDay(on){
+      isLoadingDay = on;
+      if (btnNew) btnNew.disabled = on;
+      if (dlgSave) dlgSave.disabled = on;
+
+      if (headerStatus && on){
+        headerStatus.innerHTML = `<div class="hs-date">読み込み中…</div>`;
+      }
+    }
+
+    /* ===== Ticket No ===== */
+    const nextTicketNo = () => {
+      const maxNo = groups.reduce((mx, g) => Math.max(mx, Number(g.ticketNo || 0)), 0);
+      return maxNo + 1;
+    };
+
+    /* ===== Normalize ===== */
+    const normalizeGroup = (g) => {
+      if (!g.primarySeat) g.primarySeat = g.seatId || "BOX1";
+
+      if (!Array.isArray(g.occupiedSeats)){
+        if (typeof g.lastSeatLabel === "string" && g.lastSeatLabel.trim()){
+          g.occupiedSeats = g.lastSeatLabel.split("+").filter(Boolean);
+        }else{
+          g.occupiedSeats = [g.primarySeat];
+        }
+      }
+
+      if (g.primarySeat && !g.occupiedSeats.includes(g.primarySeat)){
+        g.occupiedSeats.unshift(g.primarySeat);
+      }
+
+      g.name = (g.name ?? "");
+      g.partySize = Number(g.partySize ?? 1);
+      g.note = (g.note ?? "");
+      g.guestType = String(g.guestType ?? "unknown");
+
+      if (!Array.isArray(g.extends)) g.extends = [];
+      g.checkOutAt = g.checkOutAt || null;
+      if (!Array.isArray(g.moves)) g.moves = [];
+
+      g.ticketNo = Number(g.ticketNo || 0);
+      return g;
+    };
+
+    const normalizeAll = () => {
+      let touched = false;
+
+      groups = (groups || []).map((x) => {
+        const before = JSON.stringify(x);
+        const after = normalizeGroup(x);
+        if (JSON.stringify(after) !== before) touched = true;
+        return after;
+      });
+
+      const maxNo = groups.reduce((mx, g) => Math.max(mx, Number(g.ticketNo||0)), 0);
+      let seq = maxNo;
+
+      const need = groups
+        .filter((g) => !Number(g.ticketNo))
+        .sort((a, b) => new Date(a.checkInAt) - new Date(b.checkInAt));
+
+      if (need.length){
+        for (const g of need){
+          seq += 1;
+          g.ticketNo = seq;
+        }
+        touched = true;
+      }
+
+      if (touched) saveDay(currentBizDate, groups);
+    };
+
+    /* ===== DOM ===== */
+    const datePicker = document.getElementById("datePicker");
+    const btnPrev = document.getElementById("btnPrev");
+    const btnNext = document.getElementById("btnNext");
+    const btnToday = document.getElementById("btnToday");
+    const btnNew = document.getElementById("btnNew");
+    const headerStatus = document.getElementById("headerStatus");
+
+    const tbody = document.getElementById("tbody");
+    const search = document.getElementById("search");
+    const btnSortEnd = document.getElementById("btnSortEnd");
+
+    const dlg = document.getElementById("dlg");
+    const dlgTitle = document.getElementById("dlgTitle");
+    const dlgClose = document.getElementById("dlgClose");
+    const dlgCancel = document.getElementById("dlgCancel");
+    const dlgSave = document.getElementById("dlgSave");
+    const dlgDelete = document.getElementById("dlgDelete");
+
+    const fName = document.getElementById("fName");
+    const fParty = document.getElementById("fParty");
+    const fSeat = document.getElementById("fSeat");
+    const fIn = document.getElementById("fIn");
+    const fDue = document.getElementById("fDue");
+    const fNote = document.getElementById("fNote");
+    const typebar = document.getElementById("typebar");
+    const seatPick = document.getElementById("seatPick");
+    const extbar = document.getElementById("extbar");
+    const fNo = document.getElementById("fNo");
+
+    /* ===== Seat select ===== */
+    const initSeatSelect = () => {
+      fSeat.innerHTML = "";
+      for (const s of SEATS){
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = s;
+        fSeat.appendChild(opt);
+      }
+    };
+    initSeatSelect();
+
+    /* ===== seatPick ===== */
+    const refreshSeatPickUI = () => {
+      seatPick.querySelectorAll(".seatchip").forEach((btn) => {
+        btn.classList.toggle("on", tempOccupied.has(btn.dataset.seat));
+      });
+    };
+
+    const buildSeatPick = () => {
+      seatPick.innerHTML = "";
+      for (const s of SEATS){
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "seatchip";
+        b.dataset.seat = s;
+        b.textContent = s;
+        seatPick.appendChild(b);
+      }
+      refreshSeatPickUI();
+    };
+
+    /* ===== Date switch ===== */
+    datePicker.value = currentBizDate;
+
+    const setBizDate = async (newDateStr) => {
+      currentBizDate = newDateStr;
+      datePicker.value = currentBizDate;
+
+      setLoadingDay(true);
+      try{
+        groups = await loadDay(currentBizDate);
+        normalizeAll();
+        renderAll();
+      } finally {
+        setLoadingDay(false);
+      }
+    };
+
+    const addDaysToBizDate = (bizDate, delta) => {
+      const d = new Date(bizDate + "T00:00:00");
+      d.setDate(d.getDate() + delta);
+      return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    };
+
+    /* ===== CRUD ===== */
+    const uid = () => `${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
+
+    const seatLabelForArchive = (g) => {
+      if (g.lastSeatLabel) return g.lastSeatLabel;
+      if (g.lastSeatId) return g.lastSeatId;
+
+      const primary = g.primarySeat || g.seatId || "";
+      const occ = Array.isArray(g.occupiedSeats) ? g.occupiedSeats : [];
+      const extra = occ.filter((s) => s && s !== primary);
+      return [primary, ...extra].filter(Boolean).join("+");
+    };
+
+    const closeGroup = (groupId) => {
+      const g = groups.find((x) => x.id === groupId);
+      if (!g || g.checkOutAt) return;
+
+      g.checkOutAt = nowRounded().toISOString();
+
+      const primary = g.primarySeat || g.seatId || "";
+      const occ = Array.isArray(g.occupiedSeats) ? g.occupiedSeats : [];
+      const extra = occ.filter((s) => s && s !== primary);
+      g.lastSeatLabel = [primary, ...extra].filter(Boolean).join("+");
+
+      g.lastSeatId = g.seatId;
+      g.seatId = "ARCHIVE";
+
+      saveDay(currentBizDate, groups);
+      renderAll();
+    };
+
+    const deleteGroup = (groupId) => {
+      const g = groups.find((x) => x.id === groupId);
+      if (!g) return;
+
+      const label = (g.name || "未入力");
+      if (!confirm(`「${label}」を削除しますか？（元に戻せません）`)) return;
+
+      groups = groups.filter((x) => x.id !== groupId);
+      saveDay(currentBizDate, groups);
+      renderAll();
+    };
+
+    const movePrimary = (groupId, newSeat) => {
+      const g = groups.find((x) => x.id === groupId);
+      if (!g || g.checkOutAt) return;
+
+      const old = g.primarySeat || g.seatId;
+      if (old === newSeat) return;
+
+      g.moves = g.moves || [];
+      g.moves.push({ from: old, to: newSeat, at: nowRounded().toISOString() });
+
+      const occ = Array.isArray(g.occupiedSeats) ? [...g.occupiedSeats] : [];
+      let replaced = false;
+
+      for (let i = 0; i < occ.length; i++){
+        if (occ[i] === old){
+          occ[i] = newSeat;
+          replaced = true;
+        }
+      }
+      if (!replaced) occ.unshift(newSeat);
+
+      const uniq = Array.from(new Set(occ.filter(Boolean)));
+      g.occupiedSeats = [newSeat, ...uniq.filter((s) => s !== newSeat)];
+      g.primarySeat = newSeat;
+
+      saveDay(currentBizDate, groups);
+      renderAll();
+    };
+
+    /* ===== Modal helpers ===== */
+    const setTypeUI = (t) => {
+      tempGuestType = t;
+      typebar.querySelectorAll(".typebtn").forEach((b) => {
+        b.classList.toggle("on", b.dataset.type === t);
+      });
+    };
+
+    typebar.addEventListener("click", (e) => {
+      const btn = e.target.closest(".typebtn");
+      if (!btn) return;
+      setTypeUI(btn.dataset.type);
+    });
+
+    seatPick.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seatchip");
+      if (!btn) return;
+
+      const seat = btn.dataset.seat;
+      if (!seat) return;
+
+      if (tempOccupied.has(seat)) tempOccupied.delete(seat);
+      else tempOccupied.add(seat);
+
+      const primary = fSeat.value;
+      if (primary) tempOccupied.add(primary);
+
+      refreshSeatPickUI();
+    });
+
+    fSeat.addEventListener("change", () => {
+      const primary = fSeat.value;
+      if (primary) tempOccupied.add(primary);
+      refreshSeatPickUI();
+    });
+
+    const openNewDialog = (defaultSeat="BOX1") => {
+      editingId = null;
+      dlgTitle.textContent = "新規卓";
+      extbar.style.display = "none";
+
+      fName.value = "";
+      fNo.value = nextTicketNo();
+      fParty.value = 1;
+      fSeat.value = defaultSeat;
+
+      const t = nowRounded();
+      fIn.value = toHHMM(t);
+      fDue.value = toHHMM(addMinutes(t, BASE_MIN));
+      fNote.value = "";
+
+      tempOccupied = new Set([defaultSeat]);
+      buildSeatPick();
+      setTypeUI("unknown");
+
+      dlgDelete.style.display = "none";
+      dlg.showModal();
+      setTimeout(() => fName.focus(), 0);
+    };
+
+    const dueFromInput = (g, hhmm) => {
+      if (!hhmm) return dueAt(g);
+      const inDate = new Date(g.checkInAt);
+      const [h, m] = hhmm.split(":").map(Number);
+
+      const d = new Date(inDate);
+      d.setHours(h, m, 0, 0);
+
+      if (d < inDate) d.setDate(d.getDate() + 1);
+      return d;
+    };
+
+    const updateExtInfo = (g, dueOverrideDate=null) => {
+      const now = new Date();
+      const due = dueOverrideDate || dueAt(g);
+      const rem = Math.floor((due - now) / 60000);
+      const elp = elapsedMin(g, now);
+
+      const mRem = document.getElementById("mRem");
+      const mElp = document.getElementById("mElp");
+
+      if (mRem) mRem.textContent = rem >= 0 ? `残${rem}分` : `超過${Math.abs(rem)}分`;
+      if (mElp) mElp.textContent = `経過${elp}分`;
+    };
+
+    const openEditDialog = (groupId) => {
+      const g = groups.find((x) => x.id === groupId);
+      if (!g) return;
+
+      editingId = groupId;
+      dlgTitle.textContent = "編集";
+      extbar.style.display = "block";
+
+      fName.value = (g.name || "");
+      fNo.value = Number(g.ticketNo || 0) || "";
+      fParty.value = (g.partySize || 1);
+      fSeat.value = (g.primarySeat || g.seatId || "BOX1");
+      fIn.value = toHHMM(new Date(g.checkInAt));
+      fDue.value = toHHMM(dueAt(g));
+      fNote.value = (g.note || "");
+
+      tempOccupied = new Set(Array.isArray(g.occupiedSeats) ? g.occupiedSeats : [fSeat.value]);
+      tempOccupied.add(fSeat.value);
+      buildSeatPick();
+      setTypeUI(guestTypeKey(g) || "unknown");
+
+      updateExtInfo(g, dueFromInput(g, fDue.value));
+
+      dlgDelete.style.display = "inline-block";
+      dlg.showModal();
+    };
+
+    extbar.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn || !editingId) return;
+
+      const g = groups.find((x) => x.id === editingId);
+      if (!g) return;
+
+      if (btn.dataset.act === "close"){
+        const label = ((g.name || "").trim() ? g.name : "未入力");
+        if (!confirm(`「${label}」を退店にしますか？`)) return;
+        dlg.close();
+        closeGroup(editingId);
+        editingId = null;
+        return;
+      }
+
+      const min = Number(btn.dataset.min || 0);
+      if (!min) return;
+
+      const currentDue = dueFromInput(g, fDue.value);
+      const newDue = addMinutes(currentDue, min);
+
+      fDue.value = toHHMM(newDue);
+      updateExtInfo(g, newDue);
+    });
+
+    // ★延長の組み立て：30/60だけ使う
+    const rebuildExtendsFromDue = (g, inDate, dueHHMM) => {
+      if (!dueHHMM) return;
+
+      const [hh, mm] = dueHHMM.split(":").map(Number);
+      const dueDate = new Date(inDate);
+      dueDate.setHours(hh, mm, 0, 0);
+      if (dueDate < inDate) dueDate.setDate(dueDate.getDate() + 1);
+
+      const baseDue = addMinutes(inDate, BASE_MIN);
+
+      let extMin = Math.max(0, Math.round((dueDate - baseDue) / 60000));
+      extMin = Math.round(extMin / 30) * 30;
+
+      const newExt = [];
+      let remain = extMin;
+
+      while (remain > 0 && newExt.length < 8){
+        const take = (remain >= 60) ? 60 : 30;
+        newExt.push({ at: nowRounded().toISOString(), min: take });
+        remain -= take;
+      }
+      g.extends = newExt;
+    };
+
+    fDue.addEventListener("input", () => {
+      if (!editingId) return;
+      const g = groups.find((x) => x.id === editingId);
+      if (!g) return;
+      updateExtInfo(g, dueFromInput(g, fDue.value));
+    });
+
+    const saveDialog = () => {
+      const name = (fName.value || "").trim();
+      const party = Number(fParty.value || 1);
+      const primary = fSeat.value;
+      const inHHMM = fIn.value;
+      const dueHHMM = fDue.value;
+      const note = (fNote.value || "").trim();
+
+      const ticketNo = Number(fNo.value || 0);
+      if (!ticketNo){
+        alert("伝票Noを入れてね！");
+        return;
+      }
+
+      const clash = groups.find((x) => x.id !== editingId && Number(x.ticketNo) === ticketNo);
+      if (clash && !confirm(`伝票No「${ticketNo}」は既に使われてるよ。重複していい？`)) return;
+
+      if (!inHHMM){
+        alert("入店時間を入れてね！");
+        return;
+      }
+
+      const inDate = checkInDateFromHHMM(inHHMM);
+
+      if (editingId){
+        const g = groups.find((x) => x.id === editingId);
+        if (!g) return;
+
+        g.name = name;
+        g.ticketNo = ticketNo;
+        g.partySize = party;
+        g.note = note;
+
+        g.guestType = tempGuestType || "unknown";
+
+        g.primarySeat = primary;
+        g.occupiedSeats = Array.from(tempOccupied);
+        if (!g.occupiedSeats.includes(primary)) g.occupiedSeats.unshift(primary);
+
+        g.checkInAt = inDate.toISOString();
+        if (dueHHMM) rebuildExtendsFromDue(g, inDate, dueHHMM);
+      }else{
+        const id = uid();
+        const occ = Array.from(tempOccupied);
+        if (!occ.includes(primary)) occ.unshift(primary);
+
+        const g = normalizeGroup({
+          id,
+          ticketNo,
+          primarySeat: primary,
+          occupiedSeats: occ,
+          name,
+          guestType: tempGuestType || "unknown",
+          partySize: party,
+          note,
+          checkInAt: inDate.toISOString(),
+          extends: [],
+          checkOutAt: null,
+          moves: []
+        });
+
+        if (dueHHMM) rebuildExtendsFromDue(g, inDate, dueHHMM);
+        groups.push(g);
+      }
+
+      saveDay(currentBizDate, groups);
+      dlg.close();
+      renderAll();
+    };
+
+    /* ===== Render (cards / stamps) ===== */
+    const displayNameOf = (g) => {
+      const nm = (g.name || "").trim();
+      return nm ? nm : `No.${Number(g.ticketNo)||""}`;
+    };
+
+    const createCard = (g) => {
+      const seat = g.primarySeat || g.seatId || "";
+      const isBox = isBoxSeat(seat);
+      const isCounter = isCounterSeat(seat);
+
+      const card = document.createElement("div");
+      card.dataset.id = g.id;
+
+      const now = new Date();
+      const inT = toHHMM(new Date(g.checkInAt));
+      const dueT = toHHMM(dueAt(g));
+      const rem = remainingMin(g, now);
+
+      const displayName = displayNameOf(g);
+      const remText = (rem >= 0) ? `残${rem}分` : `超過${Math.abs(rem)}分`;
+      const typeText = typeShort(g);
+
+      card.className = "guest-card";
+      if (isBox) card.classList.add("is-box");
+      if (isCounter) card.classList.add("is-counter");
+      if (rem < 0) card.classList.add("is-over");
+      else if (rem <= 10) card.classList.add("is-soon"); // MaoMaoは回転早いので10分前
+
+      card.innerHTML = `
+        <div class="card-head">
+          <div class="card-dots">● ● ●</div>
+          <div class="card-x">×</div>
+        </div>
+        <div class="card-body">
+          ${isBox
+            ? `
+              <div class="box-no">${escapeHtml(displayName)}</div>
+              <div class="box-time">${inT} - ${dueT}</div>
+              <div class="box-rem">${escapeHtml(remText)}</div>
+              <div class="box-meta">${escapeHtml(typeText)} / ${Number(g.partySize||0)}名</div>
+            `
+            : `
+              <div class="gc-name">${escapeHtml(displayName)}</div>
+              <div class="gc-rem">${escapeHtml(remText)}</div>
+              <div class="gc-time">${inT} - ${dueT}</div>
+              <div class="gc-meta">${escapeHtml(typeText)} / ${Number(g.partySize||0)}名</div>
+            `
+          }
+        </div>
+      `;
+
+      // 編集を開く（ドラッグ中は開かない）
+      card.addEventListener("click", (ev) => {
+        if (isDragging) return;
+        if (ev.target.closest(".card-dots")) return;
+        openEditDialog(g.id);
+      });
+
+      return card;
+    };
+
+    const createStamp = (g) => {
+      const st = document.createElement("div");
+      st.className = "seat-stamp";
+      const nm = displayNameOf(g);
+      st.innerHTML = `📌 ${escapeHtml(nm)} <small>${Number(g.partySize||0)}名</small>`;
+      st.addEventListener("click", () => openEditDialog(g.id));
+      return st;
+    };
+
+    const applySingleCardClass = () => {
+      ["BOX1","BOX2"].forEach(seat => {
+        const drop = document.getElementById(`seat-${seat}`);
+        if (!drop) return;
+        const cards = drop.querySelectorAll(":scope > .guest-card");
+        drop.classList.toggle("single-card", cards.length === 1);
+      });
+    };
+
+    const renderSeats = () => {
+      for (const seat of SEATS){
+        const drop = document.getElementById(`seat-${seat}`);
+        if (drop) drop.innerHTML = "";
+      }
+
+      const staying = groups.filter((g) => !g.checkOutAt);
+
+      for (const g of staying){
+        const p = g.primarySeat || g.seatId;
+
+        if (p){
+          const drop = document.getElementById(`seat-${p}`);
+          if (drop) drop.appendChild(createCard(g));
+        }
+
+        const occ = Array.isArray(g.occupiedSeats) ? g.occupiedSeats : [];
+        for (const s of occ){
+          if (!s || s === p) continue;
+          const drop = document.getElementById(`seat-${s}`);
+          if (drop) drop.appendChild(createStamp(g));
+        }
+      }
+
+      applySingleCardClass();
+    };
+
+    /* ===== Archive table ===== */
+    const endTimeMs = (g) => (g.checkOutAt ? new Date(g.checkOutAt) : dueAt(g)).getTime();
+
+    const renderTable = () => {
+      const q = (search.value || "").trim().toLowerCase();
+
+      const sorted = [...groups].sort((a, b) => {
+        const aNo = Number(a.ticketNo);
+        const bNo = Number(b.ticketNo);
+
+        const aKey = Number.isFinite(aNo) && aNo > 0 ? aNo : 999999;
+        const bKey = Number.isFinite(bNo) && bNo > 0 ? bNo : 999999;
+
+        if (sortByEnd){
+          const ad = a.checkOutAt ? 1 : 0;
+          const bd = b.checkOutAt ? 1 : 0;
+          if (ad !== bd) return ad - bd;
+
+          if (!a.checkOutAt && !b.checkOutAt){
+            const t = endTimeMs(a) - endTimeMs(b);
+            if (t !== 0) return t;
+          }
+          return aKey - bKey;
+        }
+        return aKey - bKey;
+      });
+
+      tbody.innerHTML = "";
+      let cumPeople = 0;
+
+      const isMobile = window.matchMedia("(max-width: 560px)").matches;
+
+      for (const g of sorted){
+        const nm = (g.name || "").trim();
+        if (q && !nm.toLowerCase().includes(q)) continue;
+
+        cumPeople += Number(g.partySize || 0);
+
+        const exts = Array.isArray(g.extends) ? g.extends : [];
+        const c30 = exts.filter((e) => Number(e.min) === 30).length;
+        const c60 = exts.filter((e) => Number(e.min) === 60).length;
+        const extMin = totalExtMin(g);
+        const extText = `30:${c30} 60:${c60} ｜ 合計${extMin}分`;
+
+        const statusClass = g.checkOutAt ? "row-done" : "row-stay";
+        const tr = document.createElement("tr");
+        tr.className = statusClass + (isMobile ? " mrow" : "");
+
+        if (isMobile){
+          tr.innerHTML = `
+            <td class="m-lbl m-no-lbl">No</td>
+            <td class="m-val m-no-val">${Number(g.ticketNo) || ""}</td>
+
+            <td class="m-lbl m-cum-lbl">累計</td>
+            <td class="m-val m-cum-val">${cumPeople}</td>
+
+            <td class="m-lbl m-seat-lbl">人数</td>
+            <td class="m-val m-seat-val">${Number(g.partySize || 0)}名</td>
+
+            <td class="m-lbl m-name-lbl">お名前</td>
+            <td class="m-val m-name-val">${escapeHtml(nm || "未入力")}</td>
+
+            <td class="m-lbl m-in-lbl">入店</td>
+            <td class="m-val m-in-val">${toHHMM(new Date(g.checkInAt))}</td>
+
+            <td class="m-lbl m-out-lbl">退店</td>
+            <td class="m-val m-out-val">${g.checkOutAt ? toHHMM(new Date(g.checkOutAt)) : toHHMM(dueAt(g))}</td>
+
+            <td class="m-lbl m-ext-lbl">延長</td>
+            <td class="m-val m-ext-val">${escapeHtml(extText)}</td>
+          `;
+        }else{
+          const seatShown = g.checkOutAt
+            ? seatLabelForArchive(g)
+            : (g.primarySeat || g.seatId || "");
+
+          const status = g.checkOutAt ? "退店済" : "滞在中";
+
+          tr.innerHTML = `
+            <td class="td-muted">${Number(g.ticketNo) || ""}</td>
+            <td class="td-muted">${cumPeople}</td>
+            <td class="td-strong">${escapeHtml(seatShown)}</td>
+            <td class="td-strong">${escapeHtml(guestTypeLabel(g))}</td>
+
+            <td class="td-wrap">
+              ${escapeHtml(nm || "未入力")}
+              ${g.note ? `<div class="td-muted">📝 ${escapeHtml(g.note)}</div>` : ""} 
+            </td>
+
+            <td>${Number(g.partySize || 0)}</td>
+            <td>${toHHMM(new Date(g.checkInAt))}</td>
+            <td>${g.checkOutAt ? toHHMM(new Date(g.checkOutAt)) : toHHMM(dueAt(g))}</td>
+            <td class="td-wrap">${escapeHtml(extText)}</td>
+            <td class="${g.checkOutAt ? "td-muted" : "td-strong"}">${status}</td>
+          `;
+        }
+
+        tr.addEventListener("click", () => openEditDialog(g.id));
+        tr.style.cursor = "pointer";
+        tbody.appendChild(tr);
+      }
+    };
+
+    const formatBizDateJP = (bizStr) => {
+      const [y, m, d] = bizStr.split("-").map(Number);
+      const dt = new Date(y, m - 1, d);
+      const w = ["日","月","火","水","木","金","土"][dt.getDay()];
+      return `${y}年${m}月${d}日(${w})`;
+    };
+
+    const renderStatus = () => {
+      const staying = groups.filter((g) => !g.checkOutAt);
+      const stayingGroups = staying.length;
+      const stayingPeople = staying.reduce((a, g) => a + Number(g.partySize || 0), 0);
+
+      const totalGroups = groups.length;
+      const totalPeople = groups.reduce((a, g) => a + Number(g.partySize || 0), 0);
+
+      headerStatus.innerHTML = `
+        <div class="hs-date">${formatBizDateJP(currentBizDate)}</div>
+        <div class="hs-stats">
+          滞在中 <b>${stayingGroups}</b>組<b>${stayingPeople}</b>名
+          <span class="hs-sep">／</span>
+          累計 <b>${totalGroups}</b>組<b>${totalPeople}</b>名
+        </div>
+      `;
+    };
+
+    const renderAll = () => {
+      renderSeats();
+      renderTable();
+      renderStatus();
+    };
+
+    const refreshTick = () => {
+      renderAll();
+      if (editingId){
+        const g = groups.find((x) => x.id === editingId);
+        if (g) updateExtInfo(g);
+      }
+    };
+
+    /* ===== Drag & Drop ===== */
+    let isDragging = false;
+
+    const initSortable = () => {
+      for (const seat of SEATS){
+        const el = document.getElementById(`seat-${seat}`);
+        if (!el) continue;
+
+        new Sortable(el, {
+          group: "seats",
+          animation: 160,
+          draggable: ".guest-card",
+
+          delay: 180,
+          delayOnTouchOnly: true,
+          touchStartThreshold: 6,
+
+          forceFallback: true,
+          fallbackOnBody: true,
+          fallbackTolerance: 3,
+
+          onStart: () => { isDragging = true; },
+          onEnd: (evt) => {
+            const id = evt.item?.dataset?.id;
+            const toSeat = evt.to?.id?.replace("seat-","");
+            if (id && toSeat) movePrimary(id, toSeat);
+            setTimeout(() => { isDragging = false; }, 50);
+          }
+        });
+      }
+    };
+
+    // zone クリックで新規（ドラッグ中/読み込み中は無視）
+    document.querySelectorAll(".zone").forEach((zone) => {
+      zone.addEventListener("click", (e) => {
+        if (isDragging) return;
+        if (isLoadingDay) return;
+        if (e.target.closest(".guest-card")) return;
+        if (e.target.closest(".seat-stamp")) return;
+        const seat = zone.dataset.seat;
+        if (!seat) return;
+        openNewDialog(seat);
+      });
+    });
+
+    /* ===== Events ===== */
+    btnNew.addEventListener("click", () => {
+      if (isLoadingDay) return alert("読み込み中！終わってから新規してね🙏");
+      openNewDialog("BOX1");
+    });
+
+    btnToday.addEventListener("click", () => setBizDate(businessDateFor(new Date())));
+    btnPrev.addEventListener("click",  () => setBizDate(addDaysToBizDate(currentBizDate, -1)));
+    btnNext.addEventListener("click",  () => setBizDate(addDaysToBizDate(currentBizDate, +1)));
+
+    datePicker.addEventListener("change", () => {
+      if (!datePicker.value) return;
+      setBizDate(datePicker.value);
+    });
+
+    btnSortEnd.addEventListener("click", () => {
+      sortByEnd = !sortByEnd;
+      btnSortEnd.textContent = sortByEnd ? "入店順に戻す" : "終了時間順";
+      renderTable();
+    });
+
+    search.addEventListener("input", renderTable);
+
+    dlgClose.addEventListener("click", () => dlg.close());
+    dlgCancel.addEventListener("click", () => dlg.close());
+    dlgSave.addEventListener("click", () => {
+      if (isLoadingDay) return alert("読み込み中は保存できないよ🙏（消える事故防止）");
+      saveDialog();
+    });
+
+    dlgDelete.addEventListener("click", () => {
+      if (!editingId) return;
+      const g = groups.find((x) => x.id === editingId);
+      const label = g ? ((g.name || "").trim() ? g.name : "未入力") : "この卓";
+      if (!confirm(`「${label}」を削除していい？\n※この操作は元に戻せません`)) return;
+
+      dlg.close();
+      deleteGroup(editingId);
+      editingId = null;
+    });
+
+    /* ===== Init ===== */
+    const DEMO = false;
+
+    async function boot(){
+      datePicker.value = currentBizDate;
+
+      setLoadingDay(true);
+      try{
+        groups = await loadDay(currentBizDate);
+        normalizeAll();
+      } finally {
+        setLoadingDay(false);
+      }
+
+      initSortable();
+      renderAll();
+      setInterval(refreshTick, 60 * 1000);
+
+      if (DEMO && groups.length === 0){
+        const t = nowRounded();
+        groups = [
+          normalizeGroup({
+            id: uid(),
+            ticketNo: 1,
+            primarySeat:"BOX1",
+            occupiedSeats:["BOX1","C1","C2"],
+            name:"王",
+            guestType:"repeat",
+            partySize:6,
+            note:"団体",
+            checkInAt: addMinutes(t,-20).toISOString(),
+            extends:[],
+            checkOutAt:null,
+            moves:[]
+          }),
+          normalizeGroup({
+            id: uid(),
+            ticketNo: 2,
+            primarySeat:"C7",
+            occupiedSeats:["C7"],
+            name:"李",
+            guestType:"new",
+            partySize:2,
+            note:"",
+            checkInAt: addMinutes(t,-45).toISOString(),
+            extends:[{at:addMinutes(t,-10).toISOString(), min:30}],
+            checkOutAt:null,
+            moves:[]
+          }),
+        ];
+        saveDay(currentBizDate, groups);
+        renderAll();
+      }
+    }
+    boot();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>プラチナ卓管理ツール（閲覧専用）</title>
+  <link rel="icon" href="アイコン.png" type="image/png">
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    /* 閲覧専用の見た目ちょい足し（任意） */
+    .readonly-badge{
+      display:inline-block;
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:12px;
+      background: rgba(255,255,255,.75);
+      border: 1px solid rgba(0,0,0,.08);
+    }
+    .guest-card{ cursor: default; }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div id="headerStatus" class="header-status"></div>
+      </div>
+
+      <div class="controls">
+        <button class="btn ghost" id="btnPrev">◀ 前日</button>
+        <div class="field" title="営業日">
+          <input type="date" id="datePicker" />
+        </div>
+        <button class="btn ghost" id="btnNext">翌日 ▶</button>
+        <button class="btn ghost" id="btnToday">今日</button>
+        <span class="readonly-badge">👀 閲覧専用</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="floor">
+        <div class="seat-grid">
+          <div class="zone box2" data-seat="BOX2">
+            <div class="zone-title">BOX2</div>
+            <div class="drop" id="seat-BOX2"></div>
+          </div>
+
+          <div class="zone box3" data-seat="BOX3">
+            <div class="zone-title">BOX3</div>
+            <div class="drop" id="seat-BOX3"></div>
+          </div>
+
+          <div class="zone box1" data-seat="BOX1">
+            <div class="zone-title">BOX1</div>
+            <div class="drop" id="seat-BOX1"></div>
+          </div>
+
+          <div class="counter-row">
+            <div class="zone counter" data-seat="C1"><div class="zone-title">C1</div><div class="drop" id="seat-C1"></div></div>
+            <div class="zone counter" data-seat="C2"><div class="zone-title">C2</div><div class="drop" id="seat-C2"></div></div>
+            <div class="zone counter" data-seat="C3"><div class="zone-title">C3</div><div class="drop" id="seat-C3"></div></div>
+            <div class="zone counter" data-seat="C4"><div class="zone-title">C4</div><div class="drop" id="seat-C4"></div></div>
+            <div class="zone counter" data-seat="C5"><div class="zone-title">C5</div><div class="drop" id="seat-C5"></div></div>
+            <div class="zone counter" data-seat="C6"><div class="zone-title">C6</div><div class="drop" id="seat-C6"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="ttl">アーカイブ（受付表）</div>
+          <div class="right">
+            <input class="search" id="search" placeholder="名前検索（例：佐藤）" />
+            <button class="btn ghost" id="btnSortEnd">終了時間順</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>No</th><th>累計</th><th>卓番</th><th>区分</th><th>お客様名</th>
+                <th>人数</th><th>入店</th><th>退店</th><th>延長</th><th>状態</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const SEATS = ["BOX1","BOX2","BOX3","C1","C2","C3","C4","C5","C6"];
+      const BASE_MIN = 90;
+      const API_URL = "/api";
+
+      const pad2 = (n) => String(n).padStart(2, "0");
+      const toHHMM = (d) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+      const addMinutes = (date, min) => { const d = new Date(date); d.setMinutes(d.getMinutes()+min); return d; };
+
+      const roundDown5Min = (date) => {
+        const d = new Date(date);
+        d.setMinutes(Math.floor(d.getMinutes()/5)*5, 0, 0);
+        return d;
+      };
+
+      // 7:00より前は “前日営業日”
+      const businessDateFor = (date) => {
+        const d = new Date(date);
+        const biz = new Date(d);
+        if (biz.getHours() < 7) biz.setDate(biz.getDate() - 1);
+        return `${biz.getFullYear()}-${pad2(biz.getMonth()+1)}-${pad2(biz.getDate())}`;
+      };
+
+      const isBoxSeat = (seat) => /^BOX[123]$/.test(String(seat || ""));
+      const isCounterSeat = (seat) => /^C[1-6]$/.test(String(seat || ""));
+      const escapeHtml = (str) => String(str)
+        .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+
+      const totalExtMin = (g) => (g.extends || []).reduce((a, e) => a + (Number(e.min) || 0), 0);
+      const dueAt = (g) => addMinutes(new Date(g.checkInAt), BASE_MIN + totalExtMin(g));
+      const remainingMin = (g, now) => Math.floor((dueAt(g) - now) / 60000);
+
+      const guestTypeKey = (g) => {
+        const v = g?.guestType ?? g?.type ?? g?.customerType ?? g?.kbn ?? "unknown";
+        const s = String(v ?? "").trim().toLowerCase();
+        return s || "unknown";
+      };
+      const guestTypeLabel = (g) => {
+        const s = guestTypeKey(g);
+        if (["new","新規","shinki","first","初回","0"].includes(s)) return "新規";
+        if (["repeat","repeater","リピーター","リピ","1"].includes(s)) return "リピーター";
+        return "不明";
+      };
+      const typeShort = (g) => {
+        const t = guestTypeKey(g);
+        if (t === "new") return "新規";
+        if (t === "repeat" || t === "repeater") return "リピ";
+        return "不明";
+      };
+
+      const normalizeGroup = (g) => {
+        if (!g.primarySeat) g.primarySeat = g.seatId || "BOX1";
+        if (!Array.isArray(g.occupiedSeats)) g.occupiedSeats = [g.primarySeat];
+        if (g.primarySeat && !g.occupiedSeats.includes(g.primarySeat)) g.occupiedSeats.unshift(g.primarySeat);
+        g.name = (g.name ?? "");
+        g.partySize = Number(g.partySize ?? 1);
+        g.note = (g.note ?? "");
+        if (!Array.isArray(g.extends)) g.extends = [];
+        if (!Array.isArray(g.moves)) g.moves = [];
+        g.checkOutAt = g.checkOutAt || null;
+        g.ticketNo = Number(g.ticketNo || 0);
+        return g;
+      };
+
+      async function apiGetDay(bizDate){
+        const url = `${API_URL}?action=day&bizDate=${encodeURIComponent(bizDate)}`;
+        const res = await fetch(url, { method:"GET" });
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error || "api error");
+        return Array.isArray(json.groups) ? json.groups : [];
+      }
+
+      const storageKey = (bizDate) => `platinum_ro_day_${bizDate}`;
+
+      async function loadDay(bizDate){
+        try{
+          const data = await apiGetDay(bizDate);
+          localStorage.setItem(storageKey(bizDate), JSON.stringify(data)); // キャッシュだけ
+          return data;
+        }catch{
+          const raw = localStorage.getItem(storageKey(bizDate));
+          if (!raw) return [];
+          try { const data = JSON.parse(raw); return Array.isArray(data) ? data : []; }
+          catch { return []; }
+        }
+      }
+
+      const datePicker = document.getElementById("datePicker");
+      const btnPrev = document.getElementById("btnPrev");
+      const btnNext = document.getElementById("btnNext");
+      const btnToday = document.getElementById("btnToday");
+      const headerStatus = document.getElementById("headerStatus");
+      const tbody = document.getElementById("tbody");
+      const search = document.getElementById("search");
+      const btnSortEnd = document.getElementById("btnSortEnd");
+
+      let currentBizDate = businessDateFor(new Date());
+      let groups = [];
+      let sortByEnd = false;
+
+      const addDaysToBizDate = (bizDate, delta) => {
+        const d = new Date(bizDate + "T00:00:00");
+        d.setDate(d.getDate() + delta);
+        return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+      };
+
+      const displayNameOf = (g) => {
+        const nm = (g.name || "").trim();
+        return nm ? nm : `No.${Number(g.ticketNo)||""}`;
+      };
+
+      const createCard = (g) => {
+        const seat = g.primarySeat || g.seatId || "";
+        const isBox = isBoxSeat(seat);
+        const isCounter = isCounterSeat(seat);
+
+        const card = document.createElement("div");
+        card.dataset.id = g.id;
+
+        const now = new Date();
+        const inT = toHHMM(new Date(g.checkInAt));
+        const dueT = toHHMM(dueAt(g));
+        const rem = remainingMin(g, now);
+
+        const displayName = displayNameOf(g);
+        const remText = (rem >= 0) ? `残${rem}分` : `超過${Math.abs(rem)}分`;
+        const typeText = typeShort(g);
+
+        card.className = "guest-card";
+        if (isBox) card.classList.add("is-box");
+        if (isCounter) card.classList.add("is-counter");
+        if (rem < 0) card.classList.add("is-over");
+        else if (rem <= 15) card.classList.add("is-soon");
+
+        card.innerHTML = `
+          <div class="card-head">
+            <div class="card-dots">● ● ●</div>
+            <div class="card-x">×</div>
+          </div>
+          <div class="card-body">
+            ${
+              isBox
+                ? `
+                  <div class="box-no">${escapeHtml(displayName)}</div>
+                  <div class="box-time">${inT} - ${dueT}</div>
+                  <div class="box-rem">${escapeHtml(remText)}</div>
+                  <div class="box-meta">${escapeHtml(typeText)} / ${Number(g.partySize||0)}名</div>
+                `
+                : `
+                  <div class="gc-name">${escapeHtml(displayName)}</div>
+                  <div class="gc-rem">${escapeHtml(remText)}</div>
+                  <div class="gc-time">${inT} - ${dueT}</div>
+                  <div class="gc-meta">${escapeHtml(typeText)} / ${Number(g.partySize||0)}名</div>
+                `
+            }
+          </div>
+        `;
+        return card;
+      };
+
+      const createStamp = (g) => {
+        const st = document.createElement("div");
+        st.className = "seat-stamp";
+        const nm = displayNameOf(g);
+        st.innerHTML = `📌 ${escapeHtml(nm)} <small>${Number(g.partySize||0)}名</small>`;
+        return st;
+      };
+
+      const applySingleCardClass = () => {
+        ["BOX1","BOX2"].forEach(seat => {
+          const drop = document.getElementById(`seat-${seat}`);
+          if (!drop) return;
+          const cards = drop.querySelectorAll(":scope > .guest-card");
+          drop.classList.toggle("single-card", cards.length === 1);
+        });
+      };
+
+      const renderSeats = () => {
+        for (const seat of SEATS){
+          const drop = document.getElementById(`seat-${seat}`);
+          if (drop) drop.innerHTML = "";
+        }
+
+        const staying = groups.filter((g) => !g.checkOutAt);
+
+        for (const g of staying){
+          const p = g.primarySeat || g.seatId;
+
+          if (p){
+            const drop = document.getElementById(`seat-${p}`);
+            if (drop) drop.appendChild(createCard(g));
+          }
+
+          const occ = Array.isArray(g.occupiedSeats) ? g.occupiedSeats : [];
+          for (const s of occ){
+            if (!s || s === p) continue;
+            const drop = document.getElementById(`seat-${s}`);
+            if (drop) drop.appendChild(createStamp(g));
+          }
+        }
+        applySingleCardClass();
+      };
+
+      const endTimeMs = (g) => (g.checkOutAt ? new Date(g.checkOutAt) : dueAt(g)).getTime();
+
+      const renderTable = () => {
+        const q = (search.value || "").trim().toLowerCase();
+
+        const sorted = [...groups].sort((a, b) => {
+          const aNo = Number(a.ticketNo);
+          const bNo = Number(b.ticketNo);
+          const aKey = Number.isFinite(aNo) && aNo > 0 ? aNo : 999999;
+          const bKey = Number.isFinite(bNo) && bNo > 0 ? bNo : 999999;
+
+          if (sortByEnd){
+            const ad = a.checkOutAt ? 1 : 0;
+            const bd = b.checkOutAt ? 1 : 0;
+            if (ad !== bd) return ad - bd;
+
+            if (!a.checkOutAt && !b.checkOutAt){
+              const t = endTimeMs(a) - endTimeMs(b);
+              if (t !== 0) return t;
+            }
+            return aKey - bKey;
+          }
+          return aKey - bKey;
+        });
+
+        tbody.innerHTML = "";
+        let cumPeople = 0;
+        const isMobile = window.matchMedia("(max-width: 560px)").matches;
+
+        for (const g of sorted){
+          const nm = (g.name || "").trim();
+          if (q && !nm.toLowerCase().includes(q)) continue;
+
+          cumPeople += Number(g.partySize || 0);
+
+          const exts = Array.isArray(g.extends) ? g.extends : [];
+          const c30 = exts.filter((e) => Number(e.min) === 30).length;
+          const c60 = exts.filter((e) => Number(e.min) === 60).length;
+          const c90 = exts.filter((e) => Number(e.min) === 90).length;
+          const extMin = totalExtMin(g);
+          const extText = `30:${c30} 60:${c60} 90:${c90} ｜ 合計${extMin}分`;
+
+          const statusClass = g.checkOutAt ? "row-done" : "row-stay";
+          const tr = document.createElement("tr");
+          tr.className = statusClass + (isMobile ? " mrow" : "");
+
+          if (isMobile){
+            tr.innerHTML = `
+              <td class="m-lbl m-no-lbl">No</td><td class="m-val m-no-val">${Number(g.ticketNo) || ""}</td>
+              <td class="m-lbl m-cum-lbl">累計</td><td class="m-val m-cum-val">${cumPeople}</td>
+              <td class="m-lbl m-seat-lbl">人数</td><td class="m-val m-seat-val">${Number(g.partySize || 0)}名</td>
+              <td class="m-lbl m-name-lbl">お名前</td><td class="m-val m-name-val">${escapeHtml(nm || "未入力")}</td>
+              <td class="m-lbl m-in-lbl">入店</td><td class="m-val m-in-val">${toHHMM(new Date(g.checkInAt))}</td>
+              <td class="m-lbl m-out-lbl">退店</td><td class="m-val m-out-val">${g.checkOutAt ? toHHMM(new Date(g.checkOutAt)) : toHHMM(dueAt(g))}</td>
+              <td class="m-lbl m-ext-lbl">延長</td><td class="m-val m-ext-val">${escapeHtml(extText)}</td>
+            `;
+          }else{
+            const status = g.checkOutAt ? "退店済" : "滞在中";
+            tr.innerHTML = `
+              <td class="td-muted">${Number(g.ticketNo) || ""}</td>
+              <td class="td-muted">${cumPeople}</td>
+              <td class="td-strong">${escapeHtml(g.checkOutAt ? (g.lastSeatLabel || g.primarySeat || g.seatId || "") : (g.primarySeat || g.seatId || ""))}</td>
+              <td class="td-strong">${escapeHtml(guestTypeLabel(g))}</td>
+              <td class="td-wrap">
+                ${escapeHtml(nm || "未入力")}
+                ${g.note ? `<div class="td-muted">📝 ${escapeHtml(g.note)}</div>` : ""}
+              </td>
+              <td>${Number(g.partySize || 0)}</td>
+              <td>${toHHMM(new Date(g.checkInAt))}</td>
+              <td>${g.checkOutAt ? toHHMM(new Date(g.checkOutAt)) : toHHMM(dueAt(g))}</td>
+              <td class="td-wrap">${escapeHtml(extText)}</td>
+              <td class="${g.checkOutAt ? "td-muted" : "td-strong"}">${status}</td>
+            `;
+          }
+          tbody.appendChild(tr);
+        }
+      };
+
+      const formatBizDateJP = (bizStr) => {
+        const [y, m, d] = bizStr.split("-").map(Number);
+        const dt = new Date(y, m - 1, d);
+        const w = ["日","月","火","水","木","金","土"][dt.getDay()];
+        return `${y}年${m}月${d}日(${w})`;
+      };
+
+      const renderStatus = () => {
+        const staying = groups.filter((g) => !g.checkOutAt);
+        const stayingGroups = staying.length;
+        const stayingPeople = staying.reduce((a, g) => a + Number(g.partySize || 0), 0);
+        const totalGroups = groups.length;
+        const totalPeople = groups.reduce((a, g) => a + Number(g.partySize || 0), 0);
+
+        headerStatus.innerHTML = `
+          <div class="hs-date">${formatBizDateJP(currentBizDate)}</div>
+          <div class="hs-stats">
+            滞在中 <b>${stayingGroups}</b>組<b>${stayingPeople}</b>名
+            <span class="hs-sep">／</span>
+            累計 <b>${totalGroups}</b>組<b>${totalPeople}</b>名
+          </div>
+        `;
+      };
+
+      const renderAll = () => { renderSeats(); renderTable(); renderStatus(); };
+
+      async function setBizDate(newDateStr){
+        currentBizDate = newDateStr;
+        datePicker.value = currentBizDate;
+
+        const data = await loadDay(currentBizDate);
+        groups = (data || []).map(normalizeGroup);
+        renderAll();
+      }
+
+      btnToday.addEventListener("click", () => setBizDate(businessDateFor(new Date())));
+      btnPrev.addEventListener("click",  () => setBizDate(addDaysToBizDate(currentBizDate, -1)));
+      btnNext.addEventListener("click",  () => setBizDate(addDaysToBizDate(currentBizDate, +1)));
+      datePicker.addEventListener("change", () => { if (datePicker.value) setBizDate(datePicker.value); });
+
+      btnSortEnd.addEventListener("click", () => {
+        sortByEnd = !sortByEnd;
+        btnSortEnd.textContent = sortByEnd ? "入店順に戻す" : "終了時間順";
+        renderTable();
+      });
+      search.addEventListener("input", renderTable);
+
+      async function boot(){
+        // ?bizDate=YYYY-MM-DD 指定があればそれを優先
+        const url = new URL(location.href);
+        const qBiz = url.searchParams.get("bizDate");
+        const startBiz = qBiz && /^\d{4}-\d{2}-\d{2}$/.test(qBiz) ? qBiz : businessDateFor(new Date());
+
+        datePicker.value = startBiz;
+        await setBizDate(startBiz);
+
+        // 30秒ごとに自動更新（閲覧専用向け）
+        setInterval(async () => {
+          const data = await loadDay(currentBizDate);
+          groups = (data || []).map(normalizeGroup);
+          renderAll();
+        }, 30 * 1000);
+      }
+
+      boot();
+    })();
+  </script>
+</body>
+</html>
