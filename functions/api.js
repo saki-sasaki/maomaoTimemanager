@@ -90,13 +90,16 @@ function json(obj, status = 200, extraHeaders = {}) {
 function maskUrl(u) {
   try {
     const x = new URL(u);
-    // パスの末尾だけ残す
-    const parts = x.pathname.split("/").filter(Boolean);
-    const last = parts[parts.length - 1] || "";
-    x.pathname = "/.../" + last;
+    const m = x.pathname.match(/\/macros\/s\/([^/]+)\/exec/);
+    const id = m?.[1] || "";
+    const head = id.slice(0, 6);
+    const tail = id.slice(-6);
+    x.pathname = id ? `/macros/s/${head}...${tail}/exec` : "/macros/s/.../exec";
     x.search = "";
     return x.toString();
   } catch {
     return "invalid_url";
   }
 }
+
+
