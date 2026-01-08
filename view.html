@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>プラチナ卓管理ツール（閲覧専用）</title>
+  <title>マオマオ 卓管理ツール（閲覧専用）</title>
   <link rel="icon" href="アイコン.png" type="image/png">
   <link rel="stylesheet" href="assets/style.css">
   <style>
@@ -15,8 +15,15 @@
       font-size:12px;
       background: rgba(255,255,255,.75);
       border: 1px solid rgba(0,0,0,.08);
+      user-select:none;
+      white-space:nowrap;
     }
     .guest-card{ cursor: default; }
+    .seat-stamp{ cursor: default; }
+    /* “×”は操作感出るので隠す（任意） */
+    .card-x{ display:none; }
+    /* Zoneクリックで新規…みたいな挙動がないので、それっぽさも抑える */
+    .zone{ cursor: default; }
   </style>
 </head>
 
@@ -34,36 +41,28 @@
         </div>
         <button class="btn ghost" id="btnNext">翌日 ▶</button>
         <button class="btn ghost" id="btnToday">今日</button>
-        <span class="readonly-badge">👀 閲覧専用</span>
+        <span class="readonly-badge">💛閲覧専用💛</span>
       </div>
     </header>
 
     <div class="grid">
       <section class="floor">
         <div class="seat-grid">
-          <div class="zone box2" data-seat="BOX2">
-            <div class="zone-title">BOX2</div>
-            <div class="drop" id="seat-BOX2"></div>
-          </div>
+          <!-- Counters -->
+          <div class="zone counter" data-seat="C1"><div class="zone-title">C1</div><div class="drop" id="seat-C1"></div></div>
+          <div class="zone counter" data-seat="C2"><div class="zone-title">C2</div><div class="drop" id="seat-C2"></div></div>
 
-          <div class="zone box3" data-seat="BOX3">
-            <div class="zone-title">BOX3</div>
-            <div class="drop" id="seat-BOX3"></div>
-          </div>
+          <!-- Boxes -->
+          <div class="zone box" data-seat="BOX1"><div class="zone-title">BOX1</div><div class="drop" id="seat-BOX1"></div></div>
+          <div class="zone box" data-seat="BOX2"><div class="zone-title">BOX2</div><div class="drop" id="seat-BOX2"></div></div>
 
-          <div class="zone box1" data-seat="BOX1">
-            <div class="zone-title">BOX1</div>
-            <div class="drop" id="seat-BOX1"></div>
-          </div>
-
-          <div class="counter-row">
-            <div class="zone counter" data-seat="C1"><div class="zone-title">C1</div><div class="drop" id="seat-C1"></div></div>
-            <div class="zone counter" data-seat="C2"><div class="zone-title">C2</div><div class="drop" id="seat-C2"></div></div>
-            <div class="zone counter" data-seat="C3"><div class="zone-title">C3</div><div class="drop" id="seat-C3"></div></div>
-            <div class="zone counter" data-seat="C4"><div class="zone-title">C4</div><div class="drop" id="seat-C4"></div></div>
-            <div class="zone counter" data-seat="C5"><div class="zone-title">C5</div><div class="drop" id="seat-C5"></div></div>
-            <div class="zone counter" data-seat="C6"><div class="zone-title">C6</div><div class="drop" id="seat-C6"></div></div>
-          </div>
+          <!-- Bottom counters -->
+          <div class="zone counter" data-seat="C3"><div class="zone-title">C3</div><div class="drop" id="seat-C3"></div></div>
+          <div class="zone counter" data-seat="C4"><div class="zone-title">C4</div><div class="drop" id="seat-C4"></div></div>
+          <div class="zone counter" data-seat="C5"><div class="zone-title">C5</div><div class="drop" id="seat-C5"></div></div>
+          <div class="zone counter" data-seat="C6"><div class="zone-title">C6</div><div class="drop" id="seat-C6"></div></div>
+          <div class="zone counter" data-seat="C7"><div class="zone-title">C7</div><div class="drop" id="seat-C7"></div></div>
+          <div class="zone counter" data-seat="C8"><div class="zone-title">C8</div><div class="drop" id="seat-C8"></div></div>
         </div>
       </section>
 
@@ -80,8 +79,16 @@
           <table>
             <thead>
               <tr>
-                <th>No</th><th>累計</th><th>卓番</th><th>区分</th><th>お客様名</th>
-                <th>人数</th><th>入店</th><th>退店</th><th>延長</th><th>状態</th>
+                <th>No</th>
+                <th>累計</th>
+                <th>卓番</th>
+                <th>区分</th>
+                <th>お客様名</th>
+                <th>人数</th>
+                <th>入店</th>
+                <th>退店</th>
+                <th>延長</th>
+                <th>状態</th>
               </tr>
             </thead>
             <tbody id="tbody"></tbody>
@@ -95,33 +102,39 @@
     (() => {
       "use strict";
 
-      const SEATS = ["BOX1","BOX2","BOX3","C1","C2","C3","C4","C5","C6"];
-      const BASE_MIN = 90;
+      // ===== MaoMao seats =====
+      const SEATS = ["BOX1","BOX2","C1","C2","C3","C4","C5","C6","C7","C8"];
+
+      // ===== 60分スタート =====
+      const BASE_MIN = 60;
+
+      // ===== GAS WebApp / Proxy =====
       const API_URL = "/api";
 
       const pad2 = (n) => String(n).padStart(2, "0");
       const toHHMM = (d) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-      const addMinutes = (date, min) => { const d = new Date(date); d.setMinutes(d.getMinutes()+min); return d; };
+      const addMinutes = (date, min) => { const d = new Date(date); d.setMinutes(d.getMinutes() + min); return d; };
 
       const roundDown5Min = (date) => {
         const d = new Date(date);
-        d.setMinutes(Math.floor(d.getMinutes()/5)*5, 0, 0);
+        d.setMinutes(Math.floor(d.getMinutes() / 5) * 5, 0, 0);
         return d;
       };
 
-      // 7:00より前は “前日営業日”
+      // ★営業時間 18:00〜8:00 / 8:00より前は “前日営業日”
       const businessDateFor = (date) => {
         const d = new Date(date);
         const biz = new Date(d);
-        if (biz.getHours() < 7) biz.setDate(biz.getDate() - 1);
+        if (biz.getHours() < 8) biz.setDate(biz.getDate() - 1);
         return `${biz.getFullYear()}-${pad2(biz.getMonth()+1)}-${pad2(biz.getDate())}`;
       };
 
-      const isBoxSeat = (seat) => /^BOX[123]$/.test(String(seat || ""));
-      const isCounterSeat = (seat) => /^C[1-6]$/.test(String(seat || ""));
       const escapeHtml = (str) => String(str)
         .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
         .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+
+      const isBoxSeat = (seat) => /^BOX[12]$/.test(String(seat || ""));
+      const isCounterSeat = (seat) => /^C[1-8]$/.test(String(seat || ""));
 
       const totalExtMin = (g) => (g.extends || []).reduce((a, e) => a + (Number(e.min) || 0), 0);
       const dueAt = (g) => addMinutes(new Date(g.checkInAt), BASE_MIN + totalExtMin(g));
@@ -147,18 +160,35 @@
 
       const normalizeGroup = (g) => {
         if (!g.primarySeat) g.primarySeat = g.seatId || "BOX1";
-        if (!Array.isArray(g.occupiedSeats)) g.occupiedSeats = [g.primarySeat];
-        if (g.primarySeat && !g.occupiedSeats.includes(g.primarySeat)) g.occupiedSeats.unshift(g.primarySeat);
+
+        // occupiedSeats が無い場合は lastSeatLabel から復元を試す（編集版と整合）
+        if (!Array.isArray(g.occupiedSeats)){
+          if (typeof g.lastSeatLabel === "string" && g.lastSeatLabel.trim()){
+            g.occupiedSeats = g.lastSeatLabel.split("+").filter(Boolean);
+          }else{
+            g.occupiedSeats = [g.primarySeat];
+          }
+        }
+
+        if (g.primarySeat && !g.occupiedSeats.includes(g.primarySeat)){
+          g.occupiedSeats.unshift(g.primarySeat);
+        }
+
         g.name = (g.name ?? "");
         g.partySize = Number(g.partySize ?? 1);
         g.note = (g.note ?? "");
+        g.guestType = String(g.guestType ?? "unknown");
+
         if (!Array.isArray(g.extends)) g.extends = [];
         if (!Array.isArray(g.moves)) g.moves = [];
+
         g.checkOutAt = g.checkOutAt || null;
         g.ticketNo = Number(g.ticketNo || 0);
+
         return g;
       };
 
+      // ===== API (GET only) + Cache =====
       async function apiGetDay(bizDate){
         const url = `${API_URL}?action=day&bizDate=${encodeURIComponent(bizDate)}`;
         const res = await fetch(url, { method:"GET" });
@@ -167,7 +197,7 @@
         return Array.isArray(json.groups) ? json.groups : [];
       }
 
-      const storageKey = (bizDate) => `platinum_ro_day_${bizDate}`;
+      const storageKey = (bizDate) => `maomao_ro_day_${bizDate}`;
 
       async function loadDay(bizDate){
         try{
@@ -182,15 +212,18 @@
         }
       }
 
+      // ===== DOM =====
       const datePicker = document.getElementById("datePicker");
       const btnPrev = document.getElementById("btnPrev");
       const btnNext = document.getElementById("btnNext");
       const btnToday = document.getElementById("btnToday");
       const headerStatus = document.getElementById("headerStatus");
+
       const tbody = document.getElementById("tbody");
       const search = document.getElementById("search");
       const btnSortEnd = document.getElementById("btnSortEnd");
 
+      // ===== State =====
       let currentBizDate = businessDateFor(new Date());
       let groups = [];
       let sortByEnd = false;
@@ -227,7 +260,7 @@
         if (isBox) card.classList.add("is-box");
         if (isCounter) card.classList.add("is-counter");
         if (rem < 0) card.classList.add("is-over");
-        else if (rem <= 15) card.classList.add("is-soon");
+        else if (rem <= 10) card.classList.add("is-soon"); // MaoMaoは回転早いので10分前
 
         card.innerHTML = `
           <div class="card-head">
@@ -235,20 +268,19 @@
             <div class="card-x">×</div>
           </div>
           <div class="card-body">
-            ${
-              isBox
-                ? `
-                  <div class="box-no">${escapeHtml(displayName)}</div>
-                  <div class="box-time">${inT} - ${dueT}</div>
-                  <div class="box-rem">${escapeHtml(remText)}</div>
-                  <div class="box-meta">${escapeHtml(typeText)} / ${Number(g.partySize||0)}名</div>
-                `
-                : `
-                  <div class="gc-name">${escapeHtml(displayName)}</div>
-                  <div class="gc-rem">${escapeHtml(remText)}</div>
-                  <div class="gc-time">${inT} - ${dueT}</div>
-                  <div class="gc-meta">${escapeHtml(typeText)} / ${Number(g.partySize||0)}名</div>
-                `
+            ${isBox
+              ? `
+                <div class="box-no">${escapeHtml(displayName)}</div>
+                <div class="box-rem">${escapeHtml(remText)}</div>
+                <div class="box-time">${inT} - ${dueT}</div>
+                <div class="box-meta">${escapeHtml(typeText)} / ${Number(g.partySize||0)}名</div>
+              `
+              : `
+                <div class="gc-name">${escapeHtml(displayName)}</div>
+                <div class="gc-rem">${escapeHtml(remText)}</div>
+                <div class="gc-time">${inT} - ${dueT}</div>
+                <div class="gc-meta">${escapeHtml(typeText)} / ${Number(g.partySize||0)}名</div>
+              `
             }
           </div>
         `;
@@ -295,7 +327,18 @@
             if (drop) drop.appendChild(createStamp(g));
           }
         }
+
         applySingleCardClass();
+      };
+
+      const seatLabelForArchive = (g) => {
+        if (g.lastSeatLabel) return g.lastSeatLabel;
+        if (g.lastSeatId) return g.lastSeatId;
+
+        const primary = g.primarySeat || g.seatId || "";
+        const occ = Array.isArray(g.occupiedSeats) ? g.occupiedSeats : [];
+        const extra = occ.filter((s) => s && s !== primary);
+        return [primary, ...extra].filter(Boolean).join("+");
       };
 
       const endTimeMs = (g) => (g.checkOutAt ? new Date(g.checkOutAt) : dueAt(g)).getTime();
@@ -336,9 +379,8 @@
           const exts = Array.isArray(g.extends) ? g.extends : [];
           const c30 = exts.filter((e) => Number(e.min) === 30).length;
           const c60 = exts.filter((e) => Number(e.min) === 60).length;
-          const c90 = exts.filter((e) => Number(e.min) === 90).length;
           const extMin = totalExtMin(g);
-          const extText = `30:${c30} 60:${c60} 90:${c90} ｜ 合計${extMin}分`;
+          const extText = `30:${c30} 60:${c60} ｜ 合計${extMin}分`;
 
           const statusClass = g.checkOutAt ? "row-done" : "row-stay";
           const tr = document.createElement("tr");
@@ -355,11 +397,16 @@
               <td class="m-lbl m-ext-lbl">延長</td><td class="m-val m-ext-val">${escapeHtml(extText)}</td>
             `;
           }else{
+            const seatShown = g.checkOutAt
+              ? seatLabelForArchive(g)
+              : (g.primarySeat || g.seatId || "");
+
             const status = g.checkOutAt ? "退店済" : "滞在中";
+
             tr.innerHTML = `
               <td class="td-muted">${Number(g.ticketNo) || ""}</td>
               <td class="td-muted">${cumPeople}</td>
-              <td class="td-strong">${escapeHtml(g.checkOutAt ? (g.lastSeatLabel || g.primarySeat || g.seatId || "") : (g.primarySeat || g.seatId || ""))}</td>
+              <td class="td-strong">${escapeHtml(seatShown)}</td>
               <td class="td-strong">${escapeHtml(guestTypeLabel(g))}</td>
               <td class="td-wrap">
                 ${escapeHtml(nm || "未入力")}
@@ -372,6 +419,7 @@
               <td class="${g.checkOutAt ? "td-muted" : "td-strong"}">${status}</td>
             `;
           }
+
           tbody.appendChild(tr);
         }
       };
@@ -411,6 +459,7 @@
         renderAll();
       }
 
+      // ===== Events (閲覧専用なので「日付移動・検索・並べ替え」だけ) =====
       btnToday.addEventListener("click", () => setBizDate(businessDateFor(new Date())));
       btnPrev.addEventListener("click",  () => setBizDate(addDaysToBizDate(currentBizDate, -1)));
       btnNext.addEventListener("click",  () => setBizDate(addDaysToBizDate(currentBizDate, +1)));
