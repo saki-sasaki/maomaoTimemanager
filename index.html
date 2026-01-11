@@ -546,23 +546,25 @@
       return [primary, ...extra].filter(Boolean).join("+");
     };
 
-    const closeGroup = (groupId) => {
-      const g = groups.find((x) => x.id === groupId);
-      if (!g || g.checkOutAt) return;
+    const closeGroup = (groupId, checkOutISO=null) => {
+  const g = groups.find((x) => x.id === groupId);
+  if (!g || g.checkOutAt) return;
 
-      g.checkOutAt = nowRounded().toISOString();
+  // ★退店時間は「指定があればそれ」、なければ「退店予定(dueAt)」
+  const outISO = checkOutISO || dueAt(g).toISOString();
+  g.checkOutAt = outISO;
 
-      const primary = g.primarySeat || g.seatId || "";
-      const occ = Array.isArray(g.occupiedSeats) ? g.occupiedSeats : [];
-      const extra = occ.filter((s) => s && s !== primary);
-      g.lastSeatLabel = [primary, ...extra].filter(Boolean).join("+");
+  const primary = g.primarySeat || g.seatId || "";
+  const occ = Array.isArray(g.occupiedSeats) ? g.occupiedSeats : [];
+  const extra = occ.filter((s) => s && s !== primary);
+  g.lastSeatLabel = [primary, ...extra].filter(Boolean).join("+");
 
-      g.lastSeatId = g.seatId;
-      g.seatId = "ARCHIVE";
+  g.lastSeatId = g.seatId;
+  g.seatId = "ARCHIVE";
 
-      saveDay(currentBizDate, groups);
-      renderAll();
-    };
+  saveDay(currentBizDate, groups);
+  renderAll();
+};
 
     const deleteGroup = (groupId) => {
       const g = groups.find((x) => x.id === groupId);
@@ -728,9 +730,26 @@
         const label = ((g.name || "").trim() ? g.name : "未入力");
         if (!confirm(`「${label}」を退店にしますか？`)) return;
         dlg.close();
-        closeGroup(editingId);
-        editingId = null;
-        return;
+
+// ★いま画面に出てる「退店予定(fDue)」をcheckOutAtにしたい
+// ついでに extends も fDue に合わせて整合させる（統計・表示がズレない）
+try{
+  const inDate = new Date(g.checkInAt);
+  const dueHHMM = (fDue.value || "").trim();
+
+  if (dueHHMM){
+    rebuildExtendsFromDue(g, inDate, dueHHMM);   // ←予定に合わせてextends作り直し
+  }
+
+  const plannedOut = dueAt(g).toISOString();     // ←その結果の退店予定（予定=退店時間）
+  closeGroup(editingId, plannedOut);
+}catch(e){
+  // 保険：何かあっても退店処理だけは進める（予定が取れないときはdueAtに逃げる）
+  closeGroup(editingId, null);
+}
+
+editingId = null;
+return;
       }
 
       const min = Number(btn.dataset.min || 0);
@@ -1239,4 +1258,5 @@
   </script>
 </body>
 </html>
+
 
