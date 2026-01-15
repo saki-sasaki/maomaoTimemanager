@@ -204,6 +204,24 @@
           headerStatus.innerHTML = `<div class="hs-date">更新中…</div>`;
         }
 
+        try{
+          const data = await apiGetDay(bizDate);
+          localStorage.setItem(storageKey(bizDate), JSON.stringify(data));
+          return data;
+        }catch{
+          const raw = localStorage.getItem(storageKey(bizDate));
+          if (!raw) return [];
+          try {
+            const data = JSON.parse(raw);
+            return Array.isArray(data) ? data : [];
+          } catch {
+            return [];
+          }
+        } finally {
+          
+        }
+      }
+
       // ===== DOM =====
       const datePicker = document.getElementById("datePicker");
       const btnPrev = document.getElementById("btnPrev");
@@ -486,4 +504,5 @@
   </script>
 </body>
 </html>
+
 
