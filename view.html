@@ -200,17 +200,9 @@
       const storageKey = (bizDate) => `maomao_ro_day_${bizDate}`;
 
       async function loadDay(bizDate){
-        try{
-          const data = await apiGetDay(bizDate);
-          localStorage.setItem(storageKey(bizDate), JSON.stringify(data)); // キャッシュだけ
-          return data;
-        }catch{
-          const raw = localStorage.getItem(storageKey(bizDate));
-          if (!raw) return [];
-          try { const data = JSON.parse(raw); return Array.isArray(data) ? data : []; }
-          catch { return []; }
+        if (headerStatus){
+          headerStatus.innerHTML = `<div class="hs-date">更新中…</div>`;
         }
-      }
 
       // ===== DOM =====
       const datePicker = document.getElementById("datePicker");
@@ -494,3 +486,4 @@
   </script>
 </body>
 </html>
+
