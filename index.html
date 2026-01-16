@@ -448,6 +448,43 @@
       if (touched) saveDay(currentBizDate, groups);
     };
 
+    const renumberTicketNoIfNeeded = () => {
+  if (!Array.isArray(groups) || groups.length === 0) return;
+
+  // 今の ticketNo 状態チェック
+  const nums = groups
+    .map(g => Number(g.ticketNo || 0))
+    .filter(n => Number.isFinite(n) && n > 0);
+
+  const hasDup = new Set(nums).size !== nums.length;
+  const minNo = nums.length ? Math.min(...nums) : 0;
+  const maxNo = nums.length ? Math.max(...nums) : 0;
+
+  // 「1から連番」になってないっぽい時だけ発動
+  const shouldFix =
+    hasDup ||
+    (nums.length > 0 && minNo !== 1) ||
+    (nums.length > 0 && maxNo > groups.length * 2); // 67みたいな飛び番号対策
+
+  if (!shouldFix) return;
+
+  // checkInAt の古い順に 1,2,3...
+  const sorted = [...groups].sort((a, b) => {
+    const ta = new Date(a.checkInAt).getTime();
+    const tb = new Date(b.checkInAt).getTime();
+    if (ta !== tb) return ta - tb;
+    return String(a.id).localeCompare(String(b.id));
+  });
+
+  sorted.forEach((g, i) => { g.ticketNo = i + 1; });
+
+  // groups本体にも反映（参照は同じだけど念のため）
+  groups = sorted;
+
+  saveDay(currentBizDate, groups);
+};
+
+
     /* ===== DOM ===== */
     const datePicker = document.getElementById("datePicker");
     const btnPrev = document.getElementById("btnPrev");
@@ -514,18 +551,32 @@
     datePicker.value = currentBizDate;
 
     const setBizDate = async (newDateStr) => {
-      currentBizDate = newDateStr;
-      datePicker.value = currentBizDate;
+  currentBizDate = newDateStr;
+  datePicker.value = currentBizDate;
 
-      setLoadingDay(true);
-      try{
-        groups = await loadDay(currentBizDate);
-        normalizeAll();
-        renderAll();
-      } finally {
-        setLoadingDay(false);
-      }
-    };
+  setLoadingDay(true);
+  try{
+    groups = await loadDay(currentBizDate);
+
+    // ★保険：APIが混ぜて返しても、営業日で絞る
+    groups = groups.filter((g) => {
+      const iso = g?.checkInAt;
+      if (!iso) return false;
+      // g.bizDate が来てるならそれ優先、無ければ checkInAt から営業日算出
+      if (g.bizDate) return String(g.bizDate) === currentBizDate;
+      return businessDateFor(new Date(iso)) === currentBizDate;
+    });
+
+    normalizeAll();
+
+    // ★この営業日の ticketNo を 1 からに揃える（必要なら）
+    renumberTicketNoIfNeeded();
+
+    renderAll();
+  } finally {
+    setLoadingDay(false);
+  }
+};
 
     const addDaysToBizDate = (bizDate, delta) => {
       const d = new Date(bizDate + "T00:00:00");
@@ -1258,5 +1309,6 @@ return;
   </script>
 </body>
 </html>
+
 
 
